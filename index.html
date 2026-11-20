@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="tg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Журнали давомот</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f1f5f9;
+    }
+  </style>
+</head>
+<body class="text-slate-800 pb-24">
+
+  <!-- Сарлавҳа -->
+  <header class="bg-gradient-to-r from-emerald-700 to-teal-800 text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-lg sm:text-2xl font-bold tracking-tight">📋 Журнали давомот</h1>
+        <p id="statusHint" class="text-emerald-100 text-xs mt-0.5">Калидҳои Supabase ворид нашудаанд</p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5 bg-black/15 p-1 rounded-2xl">
+        <button id="tabJournalBtn" onclick="switchTab('journal')"
+          class="px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white text-emerald-800 shadow-xs transition cursor-pointer">
+          Журнали имрӯза
+        </button>
+        <button id="tabSubjectsBtn" onclick="switchTab('subjects')"
+          class="px-3 py-2 rounded-xl text-xs sm:text-sm font-bold text-white hover:bg-white/15 transition cursor-pointer">
+          Ҳисоботи дарсҳо
+        </button>
+        <button id="tabSummaryBtn" onclick="switchTab('summary')"
+          class="px-3 py-2 rounded-xl text-xs sm:text-sm font-bold text-white hover:bg-white/15 transition cursor-pointer">
+          Ҳисоботи умумӣ
+        </button>
+        <button id="tabManageBtn" onclick="switchTab('manage')"
+          class="px-3 py-2 rounded-xl text-xs sm:text-sm font-bold text-white hover:bg-white/15 transition cursor-pointer">
+          ⚙️ Танзимот
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- 1. ЖУРНАЛИ ИМРӮЗА                                                     -->
+  <!-- ===================================================================== -->
+  <section id="journalSection" class="max-w-7xl mx-auto px-3 sm:px-4 mt-5">
+    <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-3.5 sm:p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <div class="text-xs text-slate-500 font-medium">Санаи интихобшуда</div>
+        <div id="currentDateDisplay" class="text-sm sm:text-base font-bold text-slate-800"></div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="setTodayDate()"
+          class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 px-3 py-1.5 rounded-xl font-bold transition cursor-pointer">
+          Имрӯз
+        </button>
+        <label for="datePicker" class="text-xs font-semibold text-slate-600">Сана:</label>
+        <input id="datePicker" type="date" onchange="onDateChange(this.value)"
+          class="border border-slate-300 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-600" />
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+      <div class="p-3.5 sm:p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 bg-slate-50">
+        <span id="journalHintText" class="text-xs sm:text-sm font-semibold text-slate-700">Барои иваз кардан ба тугма пахш кунед:</span>
+        <div class="flex gap-2">
+          <button onclick="markAll('present')" class="text-xs bg-emerald-100 text-emerald-800 hover:bg-emerald-200 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer">
+            Ҳама «Ҳаст»
+          </button>
+          <button onclick="markAll('absent')" class="text-xs bg-rose-100 text-rose-800 hover:bg-rose-200 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer">
+            Ҳама «Нест»
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr id="tableHeader" class="bg-slate-100 text-slate-700 text-xs border-b border-slate-200"></tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-200 text-sm"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- 2. ҲИСОБОТИ ДАРСҲО (МОҲОНА АЗ РӮИ ФАНҲО ВА ҶАМИ ДАРСҲО)            -->
+  <!-- ===================================================================== -->
+  <section id="subjectsSection" class="max-w-7xl mx-auto px-3 sm:px-4 mt-5 hidden">
+    <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <div class="text-xs text-slate-500 font-medium">Ҳисоботи моҳона аз рӯи фанҳо</div>
+        <div id="subjectsMonthTitle" class="text-sm sm:text-base font-bold text-slate-800"></div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2.5">
+        <div class="flex items-center gap-2">
+          <label for="subjectsMonthPicker" class="text-xs font-semibold text-slate-600">Моҳ:</label>
+          <input id="subjectsMonthPicker" type="month" onchange="onMonthChange(this.value)"
+            class="border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 bg-slate-50 focus:outline-none focus:border-emerald-600" />
+        </div>
+        <button onclick="exportSubjectsMonthExcel()"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs sm:text-sm transition cursor-pointer shadow-xs">
+          📥 Экспорт ба Excel (.xlsx)
+        </button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+      <div class="p-3.5 sm:p-4 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
+        <span class="text-xs sm:text-sm font-bold text-slate-700">
+          Шумораи «Нест» аз рӯи ҳар як фан дар моҳ
+        </span>
+        <span id="subjectsMonthTotalBadge" class="text-xs font-bold bg-rose-100 text-rose-800 px-3 py-1 rounded-lg">
+          Ҳамагӣ моҳ: 0 дарс
+        </span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs sm:text-sm">
+          <thead>
+            <tr id="subjectsReportHead" class="bg-slate-100 text-slate-800 font-bold border-b border-slate-200"></tr>
+          </thead>
+          <tbody id="subjectsReportBody" class="divide-y divide-slate-200"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- 3. ҲИСОБОТИ УМУМӢ (ҲАФТАҲО, МОҲ ВА ОМОРИ ХОНАНДА)                   -->
+  <!-- ===================================================================== -->
+  <section id="summarySection" class="max-w-7xl mx-auto px-3 sm:px-4 mt-5 hidden">
+    <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div class="flex flex-wrap items-end gap-3 flex-1 min-w-[260px]">
+        <div>
+          <label for="monthFilter" class="block text-xs font-bold text-slate-600 mb-1.5">Моҳ:</label>
+          <input id="monthFilter" type="month" onchange="onMonthChange(this.value)"
+            class="border border-slate-300 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 bg-slate-50 focus:outline-none focus:border-emerald-600" />
+        </div>
+
+        <div class="flex-1 min-w-[220px]">
+          <label for="studentSelect" class="block text-xs font-bold text-slate-600 mb-1.5">Хонанда (барои омори шахсӣ):</label>
+          <select id="studentSelect" onchange="renderStudentDetail()"
+            class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 bg-slate-50 focus:outline-none focus:border-emerald-600">
+          </select>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button onclick="refreshFromDatabase()"
+          class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition cursor-pointer">
+          🔄 Навсозӣ
+        </button>
+        <button onclick="exportMonthlySummaryExcel()"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition cursor-pointer shadow-xs">
+          📥 Экспорт ба Excel (Моҳона)
+        </button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden mb-6">
+      <div class="p-4 border-b border-slate-200 bg-slate-50">
+        <h2 class="text-base font-bold text-slate-800">📅 Ҷадвали умумии давомот (аз рӯи ҳафтаҳо ва моҳ)</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Шумораи «Нест» дар ҳар як ҳафта ва ҷамъи умумӣ дар моҳ.</p>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs sm:text-sm">
+          <thead>
+            <tr id="weeklySummaryHead" class="bg-slate-100 text-slate-800 font-bold border-b border-slate-200"></tr>
+          </thead>
+          <tbody id="weeklySummaryBody" class="divide-y divide-slate-200"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 text-center">
+        <div class="text-xs text-slate-500 font-medium">Ҳамагӣ дарсҳо (дар моҳ)</div>
+        <div id="stTotalLessons" class="text-2xl font-extrabold text-slate-800 mt-1">0</div>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-emerald-200 text-center">
+        <div class="text-xs text-emerald-700 font-medium">Ҳаст</div>
+        <div id="stPresentCount" class="text-2xl font-extrabold text-emerald-600 mt-1">0</div>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-rose-200 text-center">
+        <div class="text-xs text-rose-700 font-medium">Нест</div>
+        <div id="stAbsentCount" class="text-2xl font-extrabold text-rose-600 mt-1">0</div>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-indigo-200 text-center">
+        <div class="text-xs text-indigo-700 font-medium">Давомот (%)</div>
+        <div id="stAttendanceRate" class="text-2xl font-extrabold text-indigo-600 mt-1">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- 4. ТАНЗИМОТ (SUPABASE, ХОНАНДАГОН ВА ДАРСҲО)                          -->
+  <!-- ===================================================================== -->
+  <section id="manageSection" class="max-w-7xl mx-auto px-3 sm:px-4 mt-5 hidden space-y-6">
+
+    <!-- Пайвастшавӣ ба Supabase (танҳо дар браузер нигоҳ дошта мешавад) -->
+    <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 sm:p-5">
+      <h2 class="text-base sm:text-lg font-bold text-slate-800 mb-1">🔐 Пайвастшавӣ ба Supabase</h2>
+      <p class="text-xs text-slate-500 mb-4">
+        Калидҳо дар коди сайт навишта нашудаанд ва танҳо дар хотираи браузери шумо (localStorage) нигоҳ дошта мешаванд. Барои GitHub ин бехатар аст.
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+        <div>
+          <label for="sbUrlInput" class="block text-xs font-bold text-slate-600 mb-1">Supabase Project URL (бе /rest/v1/):</label>
+          <input id="sbUrlInput" type="text" placeholder="https://eteqyfjenpryfapbtyys.supabase.co"
+            class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        </div>
+        <div>
+          <label for="sbKeyInput" class="block text-xs font-bold text-slate-600 mb-1">Supabase Publishable / Anon Key:</label>
+          <input id="sbKeyInput" type="password" placeholder="sb_publishable_... ё eyJhbGciOi..."
+            class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button onclick="saveSupabaseConfig()"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs sm:text-sm transition cursor-pointer">
+          💾 Пайваст ва ҳифз кардан
+        </button>
+        <button onclick="clearSupabaseConfig()"
+          class="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-4 py-2 rounded-xl text-xs sm:text-sm transition cursor-pointer">
+          🗑 Тоза кардани калидҳо
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Хонандагон -->
+      <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 sm:p-5">
+        <h2 class="text-base sm:text-lg font-bold text-slate-800 mb-3">👨‍🎓 Хонандагон</h2>
+
+        <div class="flex gap-2 mb-4">
+          <input id="newStudentNameInput" type="text" placeholder="Ному насаби хонанда..."
+            onkeydown="if(event.key==='Enter'){ event.preventDefault(); addStudentItem(); }"
+            class="flex-1 border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+          <button type="button" onclick="addStudentItem()"
+            class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition cursor-pointer">
+            + Илова
+          </button>
+        </div>
+
+        <ul id="manageStudentsList" class="space-y-1.5 max-h-96 overflow-y-auto pr-1 text-sm"></ul>
+      </div>
+
+      <!-- Дарсҳо аз рӯи рӯзи ҳафта -->
+      <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 sm:p-5">
+        <h2 class="text-base sm:text-lg font-bold text-slate-800 mb-3">📚 Дарсҳо аз рӯи рӯз</h2>
+
+        <div class="mb-3">
+          <label for="manageDaySelect" class="block text-xs font-bold text-slate-600 mb-1">Рӯзи ҳафта:</label>
+          <select id="manageDaySelect" onchange="renderManageLessonsList()"
+            class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold bg-slate-50 focus:outline-none focus:border-emerald-600">
+            <option value="1">Душанбе</option>
+            <option value="2">Сешанбе</option>
+            <option value="3">Чоршанбе</option>
+            <option value="4">Панҷшанбе</option>
+            <option value="5">Ҷумъа</option>
+            <option value="6">Шанбе</option>
+            <option value="0">Якшанбе</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+          <input id="newLessonSubjectInput" type="text" placeholder="Номи фан..."
+            class="sm:col-span-2 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+          <input id="newLessonTimeInput" type="text" placeholder="Соат (8:00-8:50)"
+            class="border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        </div>
+        <button type="button" onclick="addLessonItem()"
+          class="w-full mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-xl text-sm transition cursor-pointer">
+          + Иловаи дарс ба ин рӯз
+        </button>
+
+        <ul id="manageLessonsList" class="space-y-1.5 max-h-72 overflow-y-auto pr-1 text-sm"></ul>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const SB_URL_STORAGE = 'davomot_sb_url';
+    const SB_KEY_STORAGE = 'davomot_sb_key';
+    const STUDENTS_STORAGE = 'davomot_students_list';
+    const SCHEDULE_STORAGE = 'davomot_schedule_by_day';
+
+    const TAJIK_DAYS = ['Якшанбе', 'Душанбе', 'Сешанбе', 'Чоршанбе', 'Панҷшанбе', 'Ҷумъа', 'Шанбе'];
+    const TAJIK_MONTHS = ['январ', 'феврал', 'март', 'апрел', 'май', 'июн', 'июл', 'август', 'сентябр', 'октябр', 'ноябр', 'декабр'];
+
+    let students = [];
+    let scheduleByDay = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 0: [] };
+
+    try {
+      const parsedStudents = JSON.parse(localStorage.getItem(STUDENTS_STORAGE));
+      if (Array.isArray(parsedStudents)) students = parsedStudents;
+    } catch (_) {}
+
+    try {
+      const parsedSchedule = JSON.parse(localStorage.getItem(SCHEDULE_STORAGE));
+      if (parsedSchedule && typeof parsedSchedule === 'object') {
+        scheduleByDay = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 0: [], ...parsedSchedule };
+      }
+    } catch (_) {}
+
+    let db = null;
+    let allRecords = [];
+
+    function normalizeSupabaseUrl(rawUrl) {
+      return String(rawUrl || '').trim().replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
+    }
+
+    function initSupabaseClient() {
+      const url = normalizeSupabaseUrl(localStorage.getItem(SB_URL_STORAGE) || '');
+      const key = String(localStorage.getItem(SB_KEY_STORAGE) || '').trim();
+
+      document.getElementById('sbUrlInput').value = url;
+      document.getElementById('sbKeyInput').value = key;
+
+      if (url && key && window.supabase) {
+        try {
+          db = window.supabase.createClient(url, key);
+          return true;
+        } catch (e) {
+          console.error(e);
+          db = null;
+          return false;
+        }
+      }
+      db = null;
+      return false;
+    }
+
+    function saveSupabaseConfig() {
+      const url = normalizeSupabaseUrl(document.getElementById('sbUrlInput').value);
+      const key = String(document.getElementById('sbKeyInput').value || '').trim();
+
+      if (!url || !key) {
+        alert('URL ва Key-ро ворид кунед.');
+        return;
+      }
+
+      localStorage.setItem(SB_URL_STORAGE, url);
+      localStorage.setItem(SB_KEY_STORAGE, key);
+      initSupabaseClient();
+      loadRecords();
+      alert('Калидҳо дар браузер ҳифз шуданд!');
+    }
+
+    function clearSupabaseConfig() {
+      localStorage.removeItem(SB_URL_STORAGE);
+      localStorage.removeItem(SB_KEY_STORAGE);
+      allRecords = [];
+      initSupabaseClient();
+      setStatusText('Калидҳои Supabase тоза карда шуданд');
+      renderAllViews();
+    }
+
+    function saveLocalConfig() {
+      localStorage.setItem(STUDENTS_STORAGE, JSON.stringify(students));
+      localStorage.setItem(SCHEDULE_STORAGE, JSON.stringify(scheduleByDay));
+    }
+
+    function getLocalDateISO() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+
+    function getLocalMonthISO() {
+      return getLocalDateISO().slice(0, 7);
+    }
+
+    function parseDateISO(isoStr) {
+      const [y, m, d] = String(isoStr).split('-').map(Number);
+      return new Date(y, (m || 1) - 1, d || 1);
+    }
+
+    function formatTajikDate(isoStr) {
+      const dt = parseDateISO(isoStr);
+      return `${TAJIK_DAYS[dt.getDay()]}, ${dt.getDate()} ${TAJIK_MONTHS[dt.getMonth()]} ${dt.getFullYear()}`;
+    }
+
+    function formatTajikMonth(monthISO) {
+      const [y, m] = String(monthISO).split('-').map(Number);
+      return `${TAJIK_MONTHS[(m || 1) - 1]} ${y || ''}`.trim();
+    }
+
+    function getWeekOfMonth(isoStr) {
+      const dayOfMonth = parseDateISO(isoStr).getDate();
+      return Math.ceil(dayOfMonth / 7);
+    }
+
+    let currentDateISO = getLocalDateISO();
+    let currentMonthISO = getLocalMonthISO();
+
+    document.getElementById('datePicker').value = currentDateISO;
+    document.getElementById('subjectsMonthPicker').value = currentMonthISO;
+    document.getElementById('monthFilter').value = currentMonthISO;
+
+    function rebuildStudentDropdown() {
+      const sSelect = document.getElementById('studentSelect');
+      const prevVal = sSelect.value;
+      if (students.length === 0) {
+        sSelect.innerHTML = `<option value="">Хонанда нест</option>`;
+        return;
+      }
+      sSelect.innerHTML = students.map((name, idx) =>
+        `<option value="${name.replace(/"/g, '&quot;')}">${idx + 1}. ${name}</option>`
+      ).join('');
+      if (prevVal && students.includes(prevVal)) sSelect.value = prevVal;
+    }
+
+    function setStatusText(msg) {
+      document.getElementById('statusHint').textContent = msg;
+    }
+
+    function getLessonsForDate(isoStr) {
+      const dayNum = parseDateISO(isoStr).getDay();
+      return scheduleByDay[dayNum] || [];
+    }
+
+    function getAllUniqueSubjects() {
+      const fromSchedule = Object.values(scheduleByDay)
+        .flat()
+        .map(x => x.subject)
+        .filter(s => s && s !== 'Рӯзи истироҳат');
+
+      const fromRecords = allRecords
+        .map(r => r.subject)
+        .filter(s => s && s !== 'Рӯзи истироҳат');
+
+      return Array.from(new Set([...fromSchedule, ...fromRecords]));
+    }
+
+    async function loadRecords() {
+      rebuildStudentDropdown();
+
+      if (!db) {
+        setStatusText('Калидҳои Supabase ворид нашудаанд (дар Танзимот ворид кунед)');
+        renderAllViews();
+        return;
+      }
+
+      setStatusText('Дар ҳоли боркунӣ аз Supabase...');
+      const { data, error } = await db
+        .from('attendance_records')
+        .select('*')
+        .order('record_date', { ascending: false })
+        .order('lesson_index', { ascending: true });
+
+      if (error) {
+        setStatusText(`Хатои база: ${error.message || 'пайваст нашуд'}`);
+        console.error(error);
+        renderAllViews();
+        return;
+      }
+
+      allRecords = data || [];
+      setStatusText('Пайваст ба Supabase');
+      renderAllViews();
+    }
+
+    async function refreshFromDatabase() {
+      await loadRecords();
+    }
+
+    function getRecordStatus(studentName, lessonIdx) {
+      const found = allRecords.find(
+        r => r.record_date === currentDateISO &&
+             r.student_name === studentName &&
+             Number(r.lesson_index) === Number(lessonIdx)
+      );
+      return found ? found.status : 'present';
+    }
+
+    async function toggleStatus(studentIdx, lessonIdx) {
+      const lessons = getLessonsForDate(currentDateISO);
+      const lessonObj = lessons[lessonIdx];
+      if (!lessonObj) return;
+
+      const studentName = students[studentIdx];
+      const nextStatus = getRecordStatus(studentName, lessonIdx) === 'present' ? 'absent' : 'present';
+      const dt = parseDateISO(currentDateISO);
+
+      const row = {
+        record_date: currentDateISO,
+        day_name: TAJIK_DAYS[dt.getDay()],
+        student_name: studentName,
+        lesson_index: lessonIdx,
+        subject: lessonObj.subject,
+        lesson_time: lessonObj.time,
+        status: nextStatus,
+        updated_at: new Date().toISOString()
+      };
+
+      const idxExisting = allRecords.findIndex(
+        r => r.record_date === row.record_date &&
+             r.student_name === row.student_name &&
+             Number(r.lesson_index) === Number(row.lesson_index)
+      );
+      if (idxExisting >= 0) allRecords[idxExisting] = row;
+      else allRecords.push(row);
+
+      renderAllViews();
+      if (!db) return;
+
+      setStatusText('Дар ҳоли сабт...');
+      const { error } = await db
+        .from('attendance_records')
+        .upsert(row, { onConflict: 'record_date,student_name,lesson_index' });
+
+      setStatusText(error ? `Хато ҳангоми сабт: ${error.message}` : 'Сабт шуд');
+    }
+
+    async function markAll(targetStatus) {
+      const lessons = getLessonsForDate(currentDateISO);
+      const dt = parseDateISO(currentDateISO);
+      const dayName = TAJIK_DAYS[dt.getDay()];
+      const rowsToSave = [];
+
+      students.forEach((studentName) => {
+        lessons.forEach((lessonObj, lessonIdx) => {
+          const row = {
+            record_date: currentDateISO,
+            day_name: dayName,
+            student_name: studentName,
+            lesson_index: lessonIdx,
+            subject: lessonObj.subject,
+            lesson_time: lessonObj.time,
+            status: targetStatus,
+            updated_at: new Date().toISOString()
+          };
+          rowsToSave.push(row);
+
+          const existingIdx = allRecords.findIndex(
+            r => r.record_date === row.record_date &&
+                 r.student_name === row.student_name &&
+                 Number(r.lesson_index) === Number(row.lesson_index)
+          );
+          if (existingIdx >= 0) allRecords[existingIdx] = row;
+          else allRecords.push(row);
+        });
+      });
+
+      renderAllViews();
+      if (!db || rowsToSave.length === 0) return;
+
+      setStatusText('Сабти гурӯҳӣ...');
+      const { error } = await db
+        .from('attendance_records')
+        .upsert(rowsToSave, { onConflict: 'record_date,student_name,lesson_index' });
+
+      setStatusText(error ? `Хато ҳангоми сабт: ${error.message}` : 'Сабт шуд');
+    }
+
+    function setTodayDate() {
+      onDateChange(getLocalDateISO());
+    }
+
+    function onDateChange(val) {
+      if (!val) return;
+      currentDateISO = val;
+      document.getElementById('datePicker').value = val;
+      renderJournal();
+    }
+
+    function onMonthChange(val) {
+      if (!val) return;
+      currentMonthISO = val;
+      document.getElementById('subjectsMonthPicker').value = val;
+      document.getElementById('monthFilter').value = val;
+      renderSubjectsMonthReport();
+      renderSummaryAndStudent();
+    }
+
+    function getMonthRecords() {
+      return allRecords.filter(r => String(r.record_date).startsWith(currentMonthISO));
+    }
+
+    function renderJournal() {
+      const dt = parseDateISO(currentDateISO);
+      const dayNum = dt.getDay();
+      const lessons = getLessonsForDate(currentDateISO);
+      document.getElementById('currentDateDisplay').textContent = formatTajikDate(currentDateISO);
+
+      const thead = document.getElementById('tableHeader');
+      const tbody = document.getElementById('tableBody');
+
+      if (students.length === 0) {
+        thead.innerHTML = '';
+        tbody.innerHTML = `<tr><td class="p-6 text-center text-slate-500 text-xs sm:text-sm">Рӯйхати хонандагон холӣ аст. Дар бахши «⚙️ Танзимот» хонанда илова кунед.</td></tr>`;
+        return;
+      }
+
+      if (lessons.length === 0) {
+        thead.innerHTML = '';
+        tbody.innerHTML = `
+          <tr>
+            <td class="p-6 text-center text-slate-600 text-xs sm:text-sm">
+              Барои рӯзи <b>${TAJIK_DAYS[dayNum]}</b> дарс илова нашудааст. Дар бахши «⚙️ Танзимот -> Дарсҳо аз рӯи рӯз» барои <b>${TAJIK_DAYS[dayNum]}</b> дарс илова кунед.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      let headHTML = `<th class="py-3 px-4 font-bold text-slate-800 sticky left-0 bg-slate-100 z-10 min-w-[210px] border-r border-slate-200">№ / Номи хонанда</th>`;
+      lessons.forEach((item, idx) => {
+        headHTML += `
+          <th class="py-2.5 px-3 text-center font-bold text-slate-800 min-w-[130px] border-r border-slate-200 last:border-r-0">
+            <div>${idx + 1}. ${item.subject}</div>
+            <div class="text-[11px] font-medium text-slate-500 mt-0.5">${item.time}</div>
+          </th>
+        `;
+      });
+      thead.innerHTML = headHTML;
+
+      tbody.innerHTML = students.map((student, sIdx) => {
+        const cells = lessons.map((_, lIdx) => {
+          const status = getRecordStatus(student, lIdx);
+          const btnClass = status === 'present'
+            ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+            : 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200';
+          return `
+            <td class="py-2 px-2 text-center border-r border-slate-100 last:border-r-0">
+              <button onclick="toggleStatus(${sIdx}, ${lIdx})"
+                class="w-20 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${btnClass}">
+                ${status === 'present' ? 'Ҳаст' : 'Нест'}
+              </button>
+            </td>
+          `;
+        }).join('');
+
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="py-2.5 px-4 font-semibold text-slate-800 sticky left-0 bg-white z-10 border-r border-slate-200 whitespace-nowrap">
+              <span class="text-slate-400 mr-1.5 text-xs">${sIdx + 1}.</span>${student}
+            </td>
+            ${cells}
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function buildSubjectsMonthMatrix() {
+      const monthRows = getMonthRecords().filter(r => r.status === 'absent');
+      const subjects = getAllUniqueSubjects();
+
+      const rows = students.map((studentName, idx) => {
+        const countsBySubject = {};
+        let totalMissed = 0;
+
+        subjects.forEach(subj => {
+          const cnt = monthRows.filter(r => r.student_name === studentName && r.subject === subj).length;
+          countsBySubject[subj] = cnt;
+          totalMissed += cnt;
+        });
+
+        return { num: idx + 1, studentName, countsBySubject, totalMissed };
+      });
+
+      return { subjects, rows };
+    }
+
+    function renderSubjectsMonthReport() {
+      document.getElementById('subjectsMonthTitle').textContent = `Моҳ: ${formatTajikMonth(currentMonthISO)}`;
+      const { subjects, rows } = buildSubjectsMonthMatrix();
+
+      const head = document.getElementById('subjectsReportHead');
+      const body = document.getElementById('subjectsReportBody');
+
+      head.innerHTML = `
+        <th class="py-3 px-4 border-r border-slate-200 sticky left-0 bg-slate-100 z-10 min-w-[220px]">№ / Номи хонанда</th>
+        ${subjects.map(subj => `<th class="py-3 px-3 text-center border-r border-slate-200 min-w-[130px]">${subj}</th>`).join('')}
+        <th class="py-3 px-4 text-center bg-amber-50 text-amber-900 min-w-[130px]">Ҷами дарсҳо</th>
+      `;
+
+      let grandTotal = 0;
+      body.innerHTML = rows.map(row => {
+        grandTotal += row.totalMissed;
+        const cellsHTML = subjects.map(subj => {
+          const cnt = row.countsBySubject[subj] || 0;
+          return `<td class="py-2.5 px-3 text-center border-r border-slate-100 font-bold ${cnt > 0 ? 'text-rose-600 bg-rose-50/50' : 'text-slate-300'}">${cnt > 0 ? cnt : ''}</td>`;
+        }).join('');
+
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="py-2.5 px-4 font-semibold text-slate-800 border-r border-slate-200 sticky left-0 bg-white z-10 whitespace-nowrap">
+              <span class="text-slate-400 mr-1.5 text-xs">${row.num}.</span>${row.studentName}
+            </td>
+            ${cellsHTML}
+            <td class="py-2.5 px-4 text-center font-extrabold bg-amber-50/50 ${row.totalMissed > 0 ? 'text-rose-700' : 'text-slate-400'}">
+              ${row.totalMissed > 0 ? row.totalMissed : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('subjectsMonthTotalBadge').textContent = `Ҳамагӣ моҳ: ${grandTotal} дарс`;
+    }
+
+    function exportSubjectsMonthExcel() {
+      const { subjects, rows } = buildSubjectsMonthMatrix();
+      const sheetData = rows.map(row => {
+        const obj = { '№': row.num, 'Номи хонанда': row.studentName };
+        subjects.forEach(subj => { obj[subj] = row.countsBySubject[subj] || ''; });
+        obj['Ҷами дарсҳо'] = row.totalMissed || '';
+        return obj;
+      });
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(sheetData);
+      XLSX.utils.book_append_sheet(wb, ws, 'Аз рӯи фанҳо');
+      XLSX.writeFile(wb, `Fanhо_${currentMonthISO}.xlsx`);
+    }
+
+    function buildWeeklySummaryData() {
+      const monthRows = getMonthRecords().filter(r => r.status === 'absent');
+      const weeks = [1, 2, 3, 4, 5];
+
+      return students.map((studentName, idx) => {
+        const studentAbsentRows = monthRows.filter(r => r.student_name === studentName);
+        const weekCounts = {};
+        weeks.forEach(w => { weekCounts[w] = 0; });
+
+        studentAbsentRows.forEach(r => {
+          const w = getWeekOfMonth(r.record_date);
+          weekCounts[w] = (weekCounts[w] || 0) + 1;
+        });
+
+        const monthTotal = weeks.reduce((sum, w) => sum + weekCounts[w], 0);
+        return { num: idx + 1, studentName, weekCounts, monthTotal };
+      });
+    }
+
+    function renderWeeklySummaryTable() {
+      const summary = buildWeeklySummaryData();
+      const weeks = [1, 2, 3, 4, 5];
+
+      document.getElementById('weeklySummaryHead').innerHTML = `
+        <th class="py-3 px-4 border-r border-slate-200 sticky left-0 bg-slate-100 z-10 min-w-[220px]">№ / Номи хонанда</th>
+        ${weeks.map(w => `<th class="py-3 px-3 text-center border-r border-slate-200 min-w-[105px]">${w}-ум ҳафта</th>`).join('')}
+        <th class="py-3 px-4 text-center bg-emerald-50 text-emerald-900 min-w-[125px]">Ҳамагӣ моҳ</th>
+      `;
+
+      document.getElementById('weeklySummaryBody').innerHTML = summary.map(row => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-2.5 px-4 font-semibold text-slate-800 border-r border-slate-200 sticky left-0 bg-white z-10 whitespace-nowrap">
+            <span class="text-slate-400 mr-1.5 text-xs">${row.num}.</span>${row.studentName}
+          </td>
+          ${weeks.map(w => {
+            const c = row.weekCounts[w];
+            return `<td class="py-2.5 px-3 text-center border-r border-slate-100 font-bold ${c > 0 ? 'text-rose-600 bg-rose-50/40' : 'text-slate-300'}">${c > 0 ? c : ''}</td>`;
+          }).join('')}
+          <td class="py-2.5 px-4 text-center font-extrabold bg-emerald-50/60 ${row.monthTotal > 0 ? 'text-rose-700' : 'text-emerald-700'}">
+            ${row.monthTotal}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function renderStudentDetail() {
+      const selectedStudent = document.getElementById('studentSelect').value;
+      const monthRows = getMonthRecords().filter(r => r.student_name === selectedStudent);
+
+      const totalLessons = monthRows.length;
+      const presentCount = monthRows.filter(r => r.status === 'present').length;
+      const absentCount = monthRows.filter(r => r.status === 'absent').length;
+      const rate = totalLessons > 0 ? Math.round((presentCount / totalLessons) * 100) : null;
+
+      document.getElementById('stTotalLessons').textContent = totalLessons;
+      document.getElementById('stPresentCount').textContent = presentCount;
+      document.getElementById('stAbsentCount').textContent = absentCount;
+      document.getElementById('stAttendanceRate').textContent = rate !== null ? `${rate}%` : '—';
+    }
+
+    function renderSummaryAndStudent() {
+      renderWeeklySummaryTable();
+      renderStudentDetail();
+    }
+
+    function exportMonthlySummaryExcel() {
+      const summary = buildWeeklySummaryData();
+      const sheetData = summary.map(row => ({
+        '№': row.num,
+        'Номи хонанда': row.studentName,
+        '1-ум ҳафта': row.weekCounts[1] || '',
+        '2-юм ҳафта': row.weekCounts[2] || '',
+        '3-юм ҳафта': row.weekCounts[3] || '',
+        '4-ум ҳафта': row.weekCounts[4] || '',
+        '5-ум ҳафта': row.weekCounts[5] || '',
+        'Ҳамагӣ моҳ': row.monthTotal
+      }));
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(sheetData);
+      XLSX.utils.book_append_sheet(wb, ws, 'Ҳисоботи умумӣ');
+      XLSX.writeFile(wb, `Umumi_${currentMonthISO}.xlsx`);
+    }
+
+    function renderManageStudentsList() {
+      const ul = document.getElementById('manageStudentsList');
+      if (students.length === 0) {
+        ul.innerHTML = `<li class="text-slate-400 text-xs py-2">Рӯйхати хонандагон холӣ аст.</li>`;
+        return;
+      }
+      ul.innerHTML = students.map((name, idx) => `
+        <li class="flex items-center justify-between bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
+          <span class="font-medium text-slate-800"><span class="text-slate-400 mr-1.5 text-xs">${idx + 1}.</span>${name}</span>
+          <button type="button" onclick="removeStudentItem(${idx})"
+            class="text-rose-600 hover:text-rose-800 text-xs font-bold px-2.5 py-1 rounded-lg hover:bg-rose-50 cursor-pointer">
+            Нест кардан
+          </button>
+        </li>
+      `).join('');
+    }
+
+    function addStudentItem() {
+      const input = document.getElementById('newStudentNameInput');
+      const name = String(input.value || '').trim();
+      if (!name) return;
+      students.push(name);
+      input.value = '';
+      saveLocalConfig();
+      rebuildStudentDropdown();
+      renderManageStudentsList();
+      renderJournal();
+      renderSubjectsMonthReport();
+      renderSummaryAndStudent();
+      input.focus();
+    }
+
+    function removeStudentItem(idx) {
+      students.splice(idx, 1);
+      saveLocalConfig();
+      rebuildStudentDropdown();
+      renderManageStudentsList();
+      renderJournal();
+      renderSubjectsMonthReport();
+      renderSummaryAndStudent();
+    }
+
+    function renderManageLessonsList() {
+      const dayNum = Number(document.getElementById('manageDaySelect').value);
+      const list = scheduleByDay[dayNum] || [];
+      const ul = document.getElementById('manageLessonsList');
+
+      if (list.length === 0) {
+        ul.innerHTML = `<li class="text-slate-400 text-xs py-2">Дар ин рӯз дарс илова нашудааст.</li>`;
+        return;
+      }
+
+      ul.innerHTML = list.map((item, idx) => `
+        <li class="flex items-center justify-between bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
+          <div>
+            <span class="font-bold text-slate-800">${idx + 1}. ${item.subject}</span>
+            <span class="text-xs text-slate-500 ml-2">${item.time}</span>
+          </div>
+          <button type="button" onclick="removeLessonItem(${dayNum}, ${idx})"
+            class="text-rose-600 hover:text-rose-800 text-xs font-bold px-2.5 py-1 rounded-lg hover:bg-rose-50 cursor-pointer">
+            Нест кардан
+          </button>
+        </li>
+      `).join('');
+    }
+
+    function addLessonItem() {
+      const dayNum = Number(document.getElementById('manageDaySelect').value);
+      const subjInput = document.getElementById('newLessonSubjectInput');
+      const timeInput = document.getElementById('newLessonTimeInput');
+
+      const subject = String(subjInput.value || '').trim();
+      const time = String(timeInput.value || '').trim() || '-';
+      if (!subject) return;
+
+      if (!Array.isArray(scheduleByDay[dayNum])) scheduleByDay[dayNum] = [];
+      scheduleByDay[dayNum].push({ subject, time });
+
+      subjInput.value = '';
+      timeInput.value = '';
+      saveLocalConfig();
+      renderManageLessonsList();
+      renderJournal();
+      renderSubjectsMonthReport();
+    }
+
+    function removeLessonItem(dayNum, idx) {
+      if (!Array.isArray(scheduleByDay[dayNum])) return;
+      scheduleByDay[dayNum].splice(idx, 1);
+      saveLocalConfig();
+      renderManageLessonsList();
+      renderJournal();
+      renderSubjectsMonthReport();
+    }
+
+    function renderAllViews() {
+      renderJournal();
+      renderSubjectsMonthReport();
+      renderSummaryAndStudent();
+      renderManageStudentsList();
+      renderManageLessonsList();
+    }
+
+    function switchTab(tab) {
+      const sections = {
+        journal: document.getElementById('journalSection'),
+        subjects: document.getElementById('subjectsSection'),
+        summary: document.getElementById('summarySection'),
+        manage: document.getElementById('manageSection')
+      };
+      const buttons = {
+        journal: document.getElementById('tabJournalBtn'),
+        subjects: document.getElementById('tabSubjectsBtn'),
+        summary: document.getElementById('tabSummaryBtn'),
+        manage: document.getElementById('tabManageBtn')
+      };
+
+      Object.keys(sections).forEach(key => {
+        if (key === tab) {
+          sections[key].classList.remove('hidden');
+          buttons[key].className = 'px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white text-emerald-800 shadow-xs transition cursor-pointer';
+        } else {
+          sections[key].classList.add('hidden');
+          buttons[key].className = 'px-3 py-2 rounded-xl text-xs sm:text-sm font-bold text-white hover:bg-white/15 transition cursor-pointer';
+        }
+      });
+
+      renderAllViews();
+    }
+
+    initSupabaseClient();
+    loadRecords();
+  </script>
+</body>
+</html>
